@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from fastapi import HTTPException
 from hindsight_client import Hindsight
 from backend.config import settings
@@ -66,42 +66,45 @@ class HindsightService:
     async def ensure_bank_exists(self, deal_id: str, deal_name: str = "") -> str:
         bank_id = self._get_bank_id(deal_id)
         client = self._get_client()
-        bank_initialized = False
-        init_error = None
         try:
-            await client.acreate_bank(
-                bank_id=bank_id,
-                name=deal_name or f"Deal Memory: {deal_id}",
-                retain_mission=SALES_RETAIN_MISSION,
-                reflect_mission=SALES_REFLECT_MISSION,
-                enable_text_search=True,
-                enable_temporal_retrieval=True,
-                enable_graph_retrieval=True,
-                enable_reranking=True
-            )
-            bank_initialized = True
-        except Exception as create_err:
-            init_error = create_err
-            logger.debug(f"Bank {bank_id} creation response: {create_err}")
             try:
-                await client.aset_mission(bank_id=bank_id, mission=SALES_RETAIN_MISSION)
-                bank_initialized = True
-            except Exception as mission_err:
-                init_error = mission_err
-                logger.error(f"Failed to set mission for bank {bank_id}: {mission_err}")
+                await client.acreate_bank(
+                    bank_id=bank_id,
+                    name=deal_name or f"Deal Memory: {deal_id}",
+                    retain_mission=SALES_RETAIN_MISSION,
+                    reflect_mission=SALES_REFLECT_MISSION,
+                    enable_text_search=True,
+                    enable_temporal_retrieval=True,
+                    enable_graph_retrieval=True,
+                    enable_reranking=True
+                )
+                return bank_id
+            except Exception as create_err:
+                err_str = str(create_err).lower()
+                status_code = getattr(create_err, "status", None) or getattr(create_err, "status_code", None)
+                is_conflict = status_code == 409 or "already exists" in err_str or "conflict" in err_str
+                if is_conflict:
+                    try:
+                        await client.aset_mission(bank_id=bank_id, mission=SALES_RETAIN_MISSION)
+                        return bank_id
+                    except Exception as mission_err:
+                        mission_status = getattr(mission_err, "status", None) or getattr(mission_err, "status_code", None)
+                        if mission_status == 409 or "already exists" in str(mission_err).lower():
+                            return bank_id
+                        raise HTTPException(
+                            status_code=503,
+                            detail=f"Hindsight bank '{bank_id}' mission update failed: {str(mission_err)}"
+                        )
+                logger.error(f"Hindsight bank creation failed for '{bank_id}': {create_err}")
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Hindsight bank initialization failed: {str(create_err)}"
+                )
         finally:
             try:
                 await client.aclose()
             except Exception:
                 pass
-
-        if not bank_initialized:
-            raise HTTPException(
-                status_code=503,
-                detail=f"Failed to initialize Hindsight memory bank '{bank_id}': {str(init_error)}"
-            )
-
-        return bank_id
 
     async def retain_memory(
         self,

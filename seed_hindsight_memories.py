@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from backend.services.deal_agent import deal_agent
+from backend.database import get_interactions_db, get_outcomes_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("seed_memories")
@@ -30,22 +31,32 @@ async def seed_all_deal_memories():
         }
     ]
 
-    for item in acme_history:
-        await deal_agent.record_interaction_and_learn(
-            deal_id="acme-corp",
-            type=item["type"],
-            date=item["date"],
-            title=item["title"],
-            transcript=item["transcript"]
-        )
+    existing_acme = get_interactions_db("acme-corp")
+    existing_acme_titles = {i["title"] for i in existing_acme}
 
-    await deal_agent.record_outcome_and_learn(
-        deal_id="acme-corp",
-        action_taken="Presented a 10-day deployment schedule and proof-of-concept plan to Sarah Jenkins",
-        result="Client accepted the 10-day implementation timeline enthusiastically",
-        impact="positive",
-        notes="Implementation concern resolved. David Vance requested SOC2 security architecture whitepaper."
-    )
+    for item in acme_history:
+        if item["title"] not in existing_acme_titles:
+            await deal_agent.record_interaction_and_learn(
+                deal_id="acme-corp",
+                type=item["type"],
+                date=item["date"],
+                title=item["title"],
+                transcript=item["transcript"]
+            )
+            logger.info(f"Seeded interaction: {item['title']}")
+        else:
+            logger.info(f"Interaction already seeded: {item['title']}")
+
+    existing_acme_outcomes = get_outcomes_db("acme-corp")
+    if not existing_acme_outcomes:
+        await deal_agent.record_outcome_and_learn(
+            deal_id="acme-corp",
+            action_taken="Presented a 10-day deployment schedule and proof-of-concept plan to Sarah Jenkins",
+            result="Client accepted the 10-day implementation timeline enthusiastically",
+            impact="positive",
+            notes="Implementation concern resolved. David Vance requested SOC2 security architecture whitepaper."
+        )
+        logger.info("Seeded Acme Corp outcome learning.")
 
     # 2. ZENITH LTD
     zenith_history = [
@@ -63,22 +74,32 @@ async def seed_all_deal_memories():
         }
     ]
 
-    for item in zenith_history:
-        await deal_agent.record_interaction_and_learn(
-            deal_id="zenith-ltd",
-            type=item["type"],
-            date=item["date"],
-            title=item["title"],
-            transcript=item["transcript"]
-        )
+    existing_zenith = get_interactions_db("zenith-ltd")
+    existing_zenith_titles = {i["title"] for i in existing_zenith}
 
-    await deal_agent.record_outcome_and_learn(
-        deal_id="zenith-ltd",
-        action_taken="Conducted live offline-first mobile app demo showing instant sync",
-        result="Marcus accepted driver adoption strategy and validated offline sync capabilities",
-        impact="positive",
-        notes="Offline sync concern resolved. Moving to contract negotiation."
-    )
+    for item in zenith_history:
+        if item["title"] not in existing_zenith_titles:
+            await deal_agent.record_interaction_and_learn(
+                deal_id="zenith-ltd",
+                type=item["type"],
+                date=item["date"],
+                title=item["title"],
+                transcript=item["transcript"]
+            )
+            logger.info(f"Seeded interaction: {item['title']}")
+        else:
+            logger.info(f"Interaction already seeded: {item['title']}")
+
+    existing_zenith_outcomes = get_outcomes_db("zenith-ltd")
+    if not existing_zenith_outcomes:
+        await deal_agent.record_outcome_and_learn(
+            deal_id="zenith-ltd",
+            action_taken="Conducted live offline-first mobile app demo showing instant sync",
+            result="Marcus accepted driver adoption strategy and validated offline sync capabilities",
+            impact="positive",
+            notes="Offline sync concern resolved. Moving to contract negotiation."
+        )
+        logger.info("Seeded Zenith Ltd outcome learning.")
 
     # 3. NOVA SYSTEMS
     nova_history = [
@@ -90,14 +111,21 @@ async def seed_all_deal_memories():
         }
     ]
 
+    existing_nova = get_interactions_db("nova-systems")
+    existing_nova_titles = {i["title"] for i in existing_nova}
+
     for item in nova_history:
-        await deal_agent.record_interaction_and_learn(
-            deal_id="nova-systems",
-            type=item["type"],
-            date=item["date"],
-            title=item["title"],
-            transcript=item["transcript"]
-        )
+        if item["title"] not in existing_nova_titles:
+            await deal_agent.record_interaction_and_learn(
+                deal_id="nova-systems",
+                type=item["type"],
+                date=item["date"],
+                title=item["title"],
+                transcript=item["transcript"]
+            )
+            logger.info(f"Seeded interaction: {item['title']}")
+        else:
+            logger.info(f"Interaction already seeded: {item['title']}")
 
     logger.info("Successfully seeded all deal memories into Hindsight Memory Engine!")
 

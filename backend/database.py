@@ -1,6 +1,5 @@
 import sqlite3
 import json
-from datetime import datetime
 from typing import List, Dict, Any, Optional
 from backend.config import settings
 
@@ -111,7 +110,6 @@ def add_interaction_db(deal_id: str, type: str, date: str, title: str, transcrip
     """, (deal_id, type, date, title, transcript, context))
     interaction_id = cursor.lastrowid
 
-    # Touch deal updated_at
     cursor.execute("UPDATE deals SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (deal_id,))
     conn.commit()
     conn.close()
@@ -160,6 +158,34 @@ def get_outcomes_db(deal_id: str) -> List[Dict[str, Any]]:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM outcomes WHERE deal_id = ? ORDER BY id DESC", (deal_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def save_meeting_brief_db(deal_id: str, brief_text: str, evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+    conn = get_db()
+    cursor = conn.cursor()
+    payload = json.dumps({"meeting_brief": brief_text, "evidence": evidence})
+    cursor.execute("""
+    INSERT INTO meeting_briefs (deal_id, brief_data)
+    VALUES (?, ?)
+    """, (deal_id, payload))
+    brief_id = cursor.lastrowid
+
+    cursor.execute("UPDATE deals SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (deal_id,))
+    conn.commit()
+    conn.close()
+
+    return {
+        "id": brief_id,
+        "deal_id": deal_id,
+        "brief_data": payload
+    }
+
+def get_meeting_briefs_db(deal_id: str) -> List[Dict[str, Any]]:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM meeting_briefs WHERE deal_id = ? ORDER BY id DESC", (deal_id,))
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]

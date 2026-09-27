@@ -1,8 +1,7 @@
 import re
-import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from fastapi import HTTPException
 from backend.services.hindsight_service import hindsight_service
 from backend.services.llm_service import llm_service
@@ -10,8 +9,7 @@ from backend.database import (
     get_deal_db,
     add_interaction_db,
     add_outcome_db,
-    get_outcomes_db,
-    get_interactions_db
+    save_meeting_brief_db
 )
 
 logger = logging.getLogger("deal_intelligence.agent")
@@ -96,6 +94,7 @@ class DealAgent:
         1. Query Hindsight recall for comprehensive deal memory
         2. Format normalized recall context
         3. Pass context to LLM with grounded instructions
+        4. Only after successful Groq generation, persist the meeting brief
         """
         deal = get_deal_db(deal_id)
         if not deal:
@@ -132,6 +131,9 @@ class DealAgent:
 
         brief_text = await llm_service.generate_completion(system_prompt, user_prompt)
         clean_brief = strip_uuid_citations(brief_text)
+
+        # Persist generated brief only after successful Groq generation
+        save_meeting_brief_db(deal_id, clean_brief, evidence)
 
         return {
             "deal_id": deal_id,
@@ -191,26 +193,31 @@ class DealAgent:
         context: str = "sales meeting"
     ) -> Dict[str, Any]:
         """
-        1. Store interaction metadata in SQLite DB
-        2. Retain interaction in Hindsight bank with structured type tag
+        1. Verify deal exists
+        2. Build memory payload
+        3. Call Hindsight RETAIN
+        4. If RETAIN fails, DO NOT write to SQLite
+        5. Only after successful Hindsight RETAIN, insert interaction into SQLite
         """
         deal = get_deal_db(deal_id)
         if not deal:
             raise HTTPException(status_code=404, detail=f"Deal '{deal_id}' not found.")
-
-        db_record = add_interaction_db(deal_id, type, date, title, transcript, context)
 
         formatted_content = (
             f"[{type.upper()}] Date: {date} | Title: {title}\n"
             f"Transcript & Notes:\n{transcript}"
         )
 
+        # 1. Hindsight RETAIN (raises HTTPException 503 if retain fails)
         retain_res = await hindsight_service.retain_memory(
             deal_id=deal_id,
             content=formatted_content,
             context=f"INTERACTION - {type}",
-            metadata={"date": date, "title": title, "type": type}
+            metadata={"date": str(date), "title": title, "type": type}
         )
+
+        # 2. SQLite INSERT (only reached after successful RETAIN)
+        db_record = add_interaction_db(deal_id, type, str(date), title, transcript, context)
 
         return {
             "interaction": db_record,
@@ -226,15 +233,15 @@ class DealAgent:
         notes: str = ""
     ) -> Dict[str, Any]:
         """
-        1. Store outcome metadata in SQLite database
-        2. Retain structured OUTCOME & LEARNING in Hindsight memory bank
-        3. Make retrievable for future meeting briefs and strategic decision making
+        1. Verify deal exists
+        2. Build outcome memory payload
+        3. Call Hindsight RETAIN
+        4. If RETAIN fails, DO NOT write outcome to SQLite
+        5. Only after successful RETAIN, insert outcome into SQLite
         """
         deal = get_deal_db(deal_id)
         if not deal:
             raise HTTPException(status_code=404, detail=f"Deal '{deal_id}' not found.")
-
-        db_record = add_outcome_db(deal_id, action_taken, result, impact, notes)
 
         structured_outcome = (
             f"[OUTCOME & LEARNING]\n"
@@ -244,12 +251,16 @@ class DealAgent:
             f"Strategic Notes: {notes}"
         )
 
+        # 1. Hindsight RETAIN (raises HTTPException 503 if retain fails)
         retain_res = await hindsight_service.retain_memory(
             deal_id=deal_id,
             content=structured_outcome,
             context="OUTCOME - learning and approach result",
             metadata={"type": "outcome", "impact": impact}
         )
+
+        # 2. SQLite INSERT (only reached after successful RETAIN)
+        db_record = add_outcome_db(deal_id, action_taken, result, impact, notes)
 
         return {
             "outcome": db_record,

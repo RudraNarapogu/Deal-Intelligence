@@ -10,11 +10,18 @@ if env_path.exists():
 else:
     load_dotenv()
 
+db_path_env = os.getenv("DATABASE_PATH", "deal_intelligence.db")
+db_path_obj = Path(db_path_env)
+if not db_path_obj.is_absolute():
+    resolved_db_path = str(root_dir / db_path_obj)
+else:
+    resolved_db_path = str(db_path_obj)
+
 class Settings:
     HINDSIGHT_API_KEY: str = os.getenv("HINDSIGHT_API_KEY", "")
     HINDSIGHT_BASE_URL: str = os.getenv("HINDSIGHT_BASE_URL", "https://api.hindsight.vectorize.io")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    DATABASE_PATH: str = str(root_dir / "deal_intelligence.db")
+    DATABASE_PATH: str = resolved_db_path
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 settings = Settings()
