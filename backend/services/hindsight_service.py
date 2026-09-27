@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -53,7 +54,7 @@ class HindsightService:
         """
         try:
             client = self._get_client()
-            version = await client.aget_version()
+            version = await asyncio.wait_for(client.aget_version(), timeout=5.0)
             if version:
                 return "healthy"
             return "unhealthy"

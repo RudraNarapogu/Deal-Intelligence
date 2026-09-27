@@ -2,7 +2,11 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api
 
 export async function fetchHealth() {
   try {
-    const res = await fetch(`${API_BASE.replace(/\/api$/, '')}/api/health`);
+    const healthUrl = API_BASE.endsWith('/api')
+      ? `${API_BASE}/health`
+      : `${API_BASE}/api/health`;
+
+    const res = await fetch(healthUrl);
     if (!res.ok) return { api: 'unhealthy', hindsight: 'unhealthy', llm: 'unhealthy' };
     return res.json();
   } catch (e) {
