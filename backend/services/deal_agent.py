@@ -30,7 +30,7 @@ class DealAgent:
         """
         results = recall_data.get("results") or recall_data.get("facts") or recall_data.get("memories") or []
         if not results or not isinstance(results, list):
-            return "No historical memories retrieved from Hindsight bank."
+            return "No historical memories currently stored in Hindsight bank."
 
         lines = ["### RETRIEVED HINDSIGHT DEAL MEMORIES:"]
         for idx, item in enumerate(results[:20]):
@@ -98,11 +98,10 @@ class DealAgent:
 
         system_prompt = (
             load_prompt("meeting_prep.txt") + "\n\n"
-            "STRICT GROUNDING RULE:\n"
-            "Use ONLY the retrieved Hindsight memory context as your source of customer facts.\n"
-            "Do NOT invent customer requirements, pricing, stakeholders, or outcomes.\n"
-            "If the retrieved memory does not contain sufficient evidence for a section, write: "
-            "'Insufficient historical evidence in this deal's memory.'"
+            "GROUNDING RULES:\n"
+            "1. Synthesize your executive meeting brief strictly based on the provided Hindsight memory facts.\n"
+            "2. Group insights into clear sections: Deal Status, Requirements, Objections, Commercials, Competitors, Outcomes, and Recommended Priorities.\n"
+            "3. Do not invent unbacked customer facts."
         )
 
         user_prompt = (
@@ -139,18 +138,18 @@ class DealAgent:
 
         system_prompt = (
             load_prompt("next_action.txt") + "\n\n"
-            "STRICT GROUNDING RULE:\n"
-            "Answer the user's question based strictly on the retrieved Hindsight memories.\n"
-            "If the retrieved memory does not contain sufficient evidence, write: "
-            "'Insufficient historical evidence in this deal's memory.'\n"
-            "Do not fabricate missing information."
+            "GROUNDING RULES:\n"
+            "1. Answer the user's question directly, clearly, and concisely using the provided Hindsight memory facts.\n"
+            "2. Cite specific customer facts, stakeholder names, budget figures, or timeline commitments where applicable.\n"
+            "3. If memories are present, synthesize them constructively to answer the question.\n"
+            "4. Do not invent facts not backed by the memory context."
         )
 
         user_prompt = (
             f"DEAL ID: {deal_id} ({deal_name})\n"
             f"USER QUESTION: {question}\n\n"
             f"{normalized_context}\n\n"
-            "Provide a grounded answer citing relevant memory facts where applicable."
+            "Provide a direct, grounded answer citing relevant memory facts where applicable."
         )
 
         answer = await llm_service.generate_completion(system_prompt, user_prompt)
