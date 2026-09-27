@@ -2,6 +2,13 @@ import React, { useState } from 'react';
 import { Send, Bot, User, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { askAgent } from '../services/api';
 
+const safeString = (val) => {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') return JSON.stringify(val, null, 2);
+  return String(val);
+};
+
 export default function AskAgentChat({ dealId, dealName }) {
   const [messages, setMessages] = useState([
     {
@@ -34,7 +41,7 @@ export default function AskAgentChat({ dealId, dealName }) {
         ...prev,
         {
           role: 'assistant',
-          content: res.answer,
+          content: safeString(res.answer),
           evidence: res.evidence || []
         }
       ]);
@@ -43,7 +50,7 @@ export default function AskAgentChat({ dealId, dealName }) {
         ...prev,
         {
           role: 'assistant',
-          content: `⚠️ Error: ${err.message || 'Unable to query Deal Agent.'}`,
+          content: `⚠️ Error: ${safeString(err.message || err)}`,
           evidence: [],
           isError: true
         }
@@ -108,7 +115,7 @@ export default function AskAgentChat({ dealId, dealName }) {
                   : 'bg-slate-800/90 text-slate-200 border border-slate-700/70'
               }`}
             >
-              <div className="whitespace-pre-wrap">{msg.content}</div>
+              <div className="whitespace-pre-wrap">{safeString(msg.content)}</div>
 
               {/* Memory Evidence Footer if present */}
               {msg.evidence && msg.evidence.length > 0 && (
@@ -122,7 +129,7 @@ export default function AskAgentChat({ dealId, dealName }) {
                         key={item.id}
                         className="p-2 bg-slate-950/70 rounded border border-slate-800 text-[11px] text-slate-300"
                       >
-                        {item.text}
+                        {safeString(item.text)}
                       </div>
                     ))}
                   </div>
