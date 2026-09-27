@@ -48,12 +48,8 @@ class HindsightService:
         return clean_id
 
     async def check_health(self) -> str:
-        """
-        Check real connectivity to Hindsight API endpoint.
-        Returns 'healthy' or 'unhealthy'.
-        """
+        client = self._get_client()
         try:
-            client = self._get_client()
             version = await asyncio.wait_for(client.aget_version(), timeout=5.0)
             if version:
                 return "healthy"
@@ -61,6 +57,11 @@ class HindsightService:
         except Exception as e:
             logger.warning(f"Hindsight Health Check Failed: {str(e)}")
             return "unhealthy"
+        finally:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
 
     async def ensure_bank_exists(self, deal_id: str, deal_name: str = "") -> str:
         bank_id = self._get_bank_id(deal_id)
@@ -80,6 +81,11 @@ class HindsightService:
             logger.debug(f"Bank {bank_id} creation response: {e}")
             try:
                 await client.aset_mission(bank_id=bank_id, mission=SALES_RETAIN_MISSION)
+            except Exception:
+                pass
+        finally:
+            try:
+                await client.aclose()
             except Exception:
                 pass
         return bank_id
@@ -109,6 +115,11 @@ class HindsightService:
                 status_code=503,
                 detail=f"Hindsight Memory Engine retain operation failed: {str(e)}"
             )
+        finally:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
 
     async def recall_deal_memory(
         self,
@@ -141,6 +152,11 @@ class HindsightService:
                 status_code=503,
                 detail=f"Hindsight Memory Engine recall operation failed: {str(e)}"
             )
+        finally:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
 
     async def reflect_on_deal(
         self,
@@ -169,6 +185,11 @@ class HindsightService:
                 status_code=503,
                 detail=f"Hindsight Memory Engine reflect operation failed: {str(e)}"
             )
+        finally:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
 
     async def list_deal_memories(
         self,
@@ -194,5 +215,10 @@ class HindsightService:
                 status_code=503,
                 detail=f"Hindsight Memory Engine list_memories operation failed: {str(e)}"
             )
+        finally:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
 
 hindsight_service = HindsightService()
