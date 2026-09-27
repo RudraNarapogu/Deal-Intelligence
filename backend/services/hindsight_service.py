@@ -66,6 +66,8 @@ class HindsightService:
     async def ensure_bank_exists(self, deal_id: str, deal_name: str = "") -> str:
         bank_id = self._get_bank_id(deal_id)
         client = self._get_client()
+        bank_initialized = False
+        init_error = None
         try:
             await client.acreate_bank(
                 bank_id=bank_id,
@@ -77,17 +79,28 @@ class HindsightService:
                 enable_graph_retrieval=True,
                 enable_reranking=True
             )
-        except Exception as e:
-            logger.debug(f"Bank {bank_id} creation response: {e}")
+            bank_initialized = True
+        except Exception as create_err:
+            init_error = create_err
+            logger.debug(f"Bank {bank_id} creation response: {create_err}")
             try:
                 await client.aset_mission(bank_id=bank_id, mission=SALES_RETAIN_MISSION)
-            except Exception:
-                pass
+                bank_initialized = True
+            except Exception as mission_err:
+                init_error = mission_err
+                logger.error(f"Failed to set mission for bank {bank_id}: {mission_err}")
         finally:
             try:
                 await client.aclose()
             except Exception:
                 pass
+
+        if not bank_initialized:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Failed to initialize Hindsight memory bank '{bank_id}': {str(init_error)}"
+            )
+
         return bank_id
 
     async def retain_memory(

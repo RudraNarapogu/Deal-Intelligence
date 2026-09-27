@@ -18,11 +18,12 @@ async def create_interaction(deal_id: str, payload: InteractionCreate):
     if not deal:
         raise HTTPException(status_code=404, detail=f"Deal '{deal_id}' not found")
 
+    date_str = str(payload.date)
     result = await deal_agent.record_interaction_and_learn(
         deal_id=deal_id,
         type=payload.type,
-        date=payload.date,
-        title=payload.title or f"{payload.type.capitalize()} on {payload.date}",
+        date=date_str,
+        title=payload.title or f"{payload.type.capitalize()} on {date_str}",
         transcript=payload.transcript,
         context=payload.context or "sales meeting"
     )
