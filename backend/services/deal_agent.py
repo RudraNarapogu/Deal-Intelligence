@@ -1,3 +1,4 @@
+import re
 import json
 import logging
 from pathlib import Path
@@ -22,6 +23,22 @@ def load_prompt(filename: str) -> str:
         return path.read_text(encoding="utf-8")
     return "You are an enterprise sales intelligence agent."
 
+def strip_uuid_citations(text: str) -> str:
+    """
+    Remove raw memory UUIDs, bracketed citations (e.g. 【id】), and experience/world IDs from text output
+    to present clean, executive-ready Markdown.
+    """
+    if not text:
+        return ""
+    text = re.sub(r'【[^】]*】', '', text)
+    text = re.sub(r'\(?\b(experience|observation|world|ID:?)\s*[a-f0-9\-]{36}\)?', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\(\s*\)', '', text)
+    text = re.sub(r' +\.', '.', text)
+    text = re.sub(r' +,', ',', text)
+    text = re.sub(r' +', ' ', text)
+    return text.strip()
+
 class DealAgent:
     def normalize_recall_context(self, recall_data: Dict[str, Any]) -> str:
         """
@@ -39,7 +56,7 @@ class DealAgent:
                 ts = item.get("timestamp") or item.get("created_at") or item.get("date") or "Retained Memory"
                 mem_type = item.get("type") or item.get("category") or "Fact"
                 mem_id = item.get("id") or f"mem-{idx+1}"
-                lines.append(f"- **[{ts}] ({mem_type} - ID: {mem_id})**: {text}")
+                lines.append(f"- **[{ts}] ({mem_type})**: {text}")
             elif isinstance(item, str):
                 lines.append(f"- **(Fact)**: {item}")
 
@@ -59,7 +76,7 @@ class DealAgent:
                     type_str = fact.get("type") or fact.get("category") or "Memory Fact"
                     evidence.append({
                         "id": fact.get("id") or idx + 1,
-                        "text": text,
+                        "text": strip_uuid_citations(text),
                         "timestamp": str(timestamp),
                         "type": str(type_str),
                         "source": "Hindsight Memory Bank"
@@ -67,7 +84,7 @@ class DealAgent:
                 elif isinstance(fact, str):
                     evidence.append({
                         "id": idx + 1,
-                        "text": fact,
+                        "text": strip_uuid_citations(fact),
                         "timestamp": "Fact",
                         "type": "Fact",
                         "source": "Hindsight Memory Bank"
@@ -98,10 +115,11 @@ class DealAgent:
 
         system_prompt = (
             load_prompt("meeting_prep.txt") + "\n\n"
-            "GROUNDING RULES:\n"
+            "GROUNDING & FORMATTING RULES:\n"
             "1. Synthesize your executive meeting brief strictly based on the provided Hindsight memory facts.\n"
             "2. Group insights into clear sections: Deal Status, Requirements, Objections, Commercials, Competitors, Outcomes, and Recommended Priorities.\n"
-            "3. Do not invent unbacked customer facts."
+            "3. Do NOT include raw UUIDs, memory IDs, or bracketed ID citations (e.g. 【id】 or (experience id)) in your text.\n"
+            "4. Do not invent unbacked customer facts."
         )
 
         user_prompt = (
@@ -113,11 +131,12 @@ class DealAgent:
         )
 
         brief_text = await llm_service.generate_completion(system_prompt, user_prompt)
+        clean_brief = strip_uuid_citations(brief_text)
 
         return {
             "deal_id": deal_id,
             "deal_name": deal_name,
-            "meeting_brief": brief_text,
+            "meeting_brief": clean_brief,
             "evidence": evidence
         }
 
@@ -138,10 +157,10 @@ class DealAgent:
 
         system_prompt = (
             load_prompt("next_action.txt") + "\n\n"
-            "GROUNDING RULES:\n"
+            "GROUNDING & FORMATTING RULES:\n"
             "1. Answer the user's question directly, clearly, and concisely using the provided Hindsight memory facts.\n"
             "2. Cite specific customer facts, stakeholder names, budget figures, or timeline commitments where applicable.\n"
-            "3. If memories are present, synthesize them constructively to answer the question.\n"
+            "3. Do NOT include raw UUIDs, memory IDs, or bracketed citations (such as 【id】 or (experience id)) in the text.\n"
             "4. Do not invent facts not backed by the memory context."
         )
 
@@ -152,12 +171,13 @@ class DealAgent:
             "Provide a direct, grounded answer citing relevant memory facts where applicable."
         )
 
-        answer = await llm_service.generate_completion(system_prompt, user_prompt)
+        answer_text = await llm_service.generate_completion(system_prompt, user_prompt)
+        clean_answer = strip_uuid_citations(answer_text)
 
         return {
             "deal_id": deal_id,
             "question": question,
-            "answer": answer,
+            "answer": clean_answer,
             "evidence": evidence
         }
 
