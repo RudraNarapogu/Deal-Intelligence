@@ -6,6 +6,7 @@ from backend.config import settings
 
 def get_db():
     conn = sqlite3.connect(settings.DATABASE_PATH)
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -41,24 +42,25 @@ def init_db():
     """)
 
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS meeting_briefs (
+    CREATE TABLE IF NOT EXISTS outcomes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         deal_id TEXT NOT NULL,
-        brief_data TEXT NOT NULL,
+        action_taken TEXT NOT NULL,
+        result TEXT NOT NULL,
+        impact TEXT DEFAULT 'positive',
+        notes TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE CASCADE
     )
     """)
 
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS hindsight_local_memories (
+    CREATE TABLE IF NOT EXISTS meeting_briefs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         deal_id TEXT NOT NULL,
-        text TEXT NOT NULL,
-        category TEXT DEFAULT 'fact',
-        timestamp TEXT,
-        metadata TEXT DEFAULT '{}',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        brief_data TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE CASCADE
     )
     """)
 
@@ -132,21 +134,32 @@ def get_interactions_db(deal_id: str) -> List[Dict[str, Any]]:
     conn.close()
     return [dict(row) for row in rows]
 
-def add_local_memory_db(deal_id: str, text: str, category: str = "fact", timestamp: str = "") -> Dict[str, Any]:
+def add_outcome_db(deal_id: str, action_taken: str, result: str, impact: str = "positive", notes: str = "") -> Dict[str, Any]:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO hindsight_local_memories (deal_id, text, category, timestamp)
-    VALUES (?, ?, ?, ?)
-    """, (deal_id, text, category, timestamp or datetime.utcnow().strftime("%Y-%m-%d")))
+    INSERT INTO outcomes (deal_id, action_taken, result, impact, notes)
+    VALUES (?, ?, ?, ?, ?)
+    """, (deal_id, action_taken, result, impact, notes))
+    outcome_id = cursor.lastrowid
+
+    cursor.execute("UPDATE deals SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (deal_id,))
     conn.commit()
     conn.close()
-    return {"deal_id": deal_id, "text": text, "category": category, "timestamp": timestamp}
 
-def get_local_memories_db(deal_id: str) -> List[Dict[str, Any]]:
+    return {
+        "id": outcome_id,
+        "deal_id": deal_id,
+        "action_taken": action_taken,
+        "result": result,
+        "impact": impact,
+        "notes": notes
+    }
+
+def get_outcomes_db(deal_id: str) -> List[Dict[str, Any]]:
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM hindsight_local_memories WHERE deal_id = ? ORDER BY id DESC", (deal_id,))
+    cursor.execute("SELECT * FROM outcomes WHERE deal_id = ? ORDER BY id DESC", (deal_id,))
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]

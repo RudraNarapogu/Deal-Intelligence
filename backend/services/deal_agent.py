@@ -1,122 +1,156 @@
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from fastapi import HTTPException
 from backend.services.hindsight_service import hindsight_service
 from backend.services.llm_service import llm_service
-from backend.database import get_deal_db, get_interactions_db, add_interaction_db
+from backend.database import (
+    get_deal_db,
+    add_interaction_db,
+    add_outcome_db,
+    get_outcomes_db,
+    get_interactions_db
+)
 
+logger = logging.getLogger("deal_intelligence.agent")
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 def load_prompt(filename: str) -> str:
     path = PROMPTS_DIR / filename
     if path.exists():
         return path.read_text(encoding="utf-8")
-    return "You are a helpful sales deal intelligence agent."
+    return "You are an enterprise sales intelligence agent."
 
 class DealAgent:
+    def normalize_recall_context(self, recall_data: Dict[str, Any]) -> str:
+        """
+        Normalize raw Hindsight recall JSON into clean, structured Markdown context.
+        Groups facts by timestamp and memory category.
+        """
+        results = recall_data.get("results") or recall_data.get("facts") or recall_data.get("memories") or []
+        if not results or not isinstance(results, list):
+            return "No historical memories retrieved from Hindsight bank."
+
+        lines = ["### RETRIEVED HINDSIGHT DEAL MEMORIES:"]
+        for idx, item in enumerate(results[:20]):
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("content") or item.get("fact") or str(item)
+                ts = item.get("timestamp") or item.get("created_at") or item.get("date") or "Retained Memory"
+                mem_type = item.get("type") or item.get("category") or "Fact"
+                mem_id = item.get("id") or f"mem-{idx+1}"
+                lines.append(f"- **[{ts}] ({mem_type} - ID: {mem_id})**: {text}")
+            elif isinstance(item, str):
+                lines.append(f"- **(Fact)**: {item}")
+
+        return "\n".join(lines)
+
     def extract_evidence_from_recall(self, recall_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Extract clean, human-readable memory evidence items from Hindsight recall response
-        to display to judges in the UI timeline & evidence section.
+        Extract clean, human-readable provenance items from Hindsight recall response.
         """
         evidence = []
-
-        # Check for results or facts in recall response
-        facts = recall_data.get("results", []) or recall_data.get("facts", []) or []
+        facts = recall_data.get("results") or recall_data.get("facts") or []
         if isinstance(facts, list):
             for idx, fact in enumerate(facts[:15]):
                 if isinstance(fact, dict):
                     text = fact.get("text") or fact.get("content") or fact.get("fact") or str(fact)
-                    timestamp = fact.get("timestamp") or fact.get("created_at") or fact.get("date") or "Retrieved Memory"
+                    timestamp = fact.get("timestamp") or fact.get("created_at") or fact.get("date") or "Retained"
                     type_str = fact.get("type") or fact.get("category") or "Memory Fact"
                     evidence.append({
-                        "id": idx + 1,
+                        "id": fact.get("id") or idx + 1,
                         "text": text,
                         "timestamp": str(timestamp),
-                        "type": str(type_str)
+                        "type": str(type_str),
+                        "source": "Hindsight Memory Bank"
                     })
                 elif isinstance(fact, str):
                     evidence.append({
                         "id": idx + 1,
                         "text": fact,
-                        "timestamp": "Historical Fact",
-                        "type": "Fact"
+                        "timestamp": "Fact",
+                        "type": "Fact",
+                        "source": "Hindsight Memory Bank"
                     })
-
-        # Fallback if raw or direct structure
-        if not evidence and "raw" in recall_data:
-            evidence.append({
-                "id": 1,
-                "text": str(recall_data["raw"])[:300],
-                "timestamp": "Hindsight Recall",
-                "type": "Memory"
-            })
-
         return evidence
 
     async def generate_meeting_brief(self, deal_id: str) -> Dict[str, Any]:
         """
         1. Query Hindsight recall for comprehensive deal memory
-        2. Pass context to LLM for meeting preparation brief
-        3. Extract memory evidence sources for transparency
+        2. Format normalized recall context
+        3. Pass context to LLM with grounded instructions
         """
         deal = get_deal_db(deal_id)
-        deal_name = deal.get("name") if deal else deal_id
+        if not deal:
+            raise HTTPException(status_code=404, detail=f"Deal '{deal_id}' not found.")
 
+        deal_name = deal["name"]
         query = (
             f"Prepare for an upcoming sales meeting with {deal_name}. "
             "Retrieve current customer requirements, unresolved objections, "
             "pricing discussions, key stakeholders, competitors, previous commitments, "
-            "what changed recently, and previous successful or unsuccessful sales approaches."
+            "what changed recently, actions taken, and outcomes of past approaches."
         )
 
-        # 1. Recall memories from Hindsight
         recall_res = await hindsight_service.recall_deal_memory(deal_id, query, budget="high")
         evidence = self.extract_evidence_from_recall(recall_res)
+        normalized_context = self.normalize_recall_context(recall_res)
 
-        # Prepare context for LLM
-        system_prompt = load_prompt("meeting_prep.txt")
-        context_str = json.dumps(recall_res, indent=2, default=str)
+        system_prompt = (
+            load_prompt("meeting_prep.txt") + "\n\n"
+            "STRICT GROUNDING RULE:\n"
+            "Use ONLY the retrieved Hindsight memory context as your source of customer facts.\n"
+            "Do NOT invent customer requirements, pricing, stakeholders, or outcomes.\n"
+            "If the retrieved memory does not contain sufficient evidence for a section, write: "
+            "'Insufficient historical evidence in this deal's memory.'"
+        )
 
         user_prompt = (
             f"DEAL ID: {deal_id}\n"
-            f"DEAL NAME: {deal_name}\n\n"
-            f"RETRIVED HINDSIGHT MEMORY CONTEXT:\n{context_str}\n\n"
-            "Generate a structured, actionable Meeting Brief."
+            f"DEAL NAME: {deal_name}\n"
+            f"CLIENT: {deal['client_name']}\n\n"
+            f"{normalized_context}\n\n"
+            "Generate a grounded Executive Meeting Preparation Brief."
         )
 
-        # 2. LLM synthesis
         brief_text = await llm_service.generate_completion(system_prompt, user_prompt)
 
         return {
             "deal_id": deal_id,
             "deal_name": deal_name,
             "meeting_brief": brief_text,
-            "evidence": evidence,
-            "raw_recall": recall_res
+            "evidence": evidence
         }
 
     async def ask_deal_agent(self, deal_id: str, question: str) -> Dict[str, Any]:
         """
-        1. Query Hindsight for relevant memory context to answer user question
-        2. Format answer using LLM
-        3. Return grounded answer + memory evidence
+        1. Query Hindsight for relevant memory facts
+        2. Format normalized recall context
+        3. Provide direct grounded response
         """
         deal = get_deal_db(deal_id)
-        deal_name = deal.get("name") if deal else deal_id
+        if not deal:
+            raise HTTPException(status_code=404, detail=f"Deal '{deal_id}' not found.")
 
-        # Query Hindsight recall
+        deal_name = deal["name"]
         recall_res = await hindsight_service.recall_deal_memory(deal_id, question, budget="high")
         evidence = self.extract_evidence_from_recall(recall_res)
+        normalized_context = self.normalize_recall_context(recall_res)
 
-        system_prompt = load_prompt("next_action.txt")
-        context_str = json.dumps(recall_res, indent=2, default=str)
+        system_prompt = (
+            load_prompt("next_action.txt") + "\n\n"
+            "STRICT GROUNDING RULE:\n"
+            "Answer the user's question based strictly on the retrieved Hindsight memories.\n"
+            "If the retrieved memory does not contain sufficient evidence, write: "
+            "'Insufficient historical evidence in this deal's memory.'\n"
+            "Do not fabricate missing information."
+        )
 
         user_prompt = (
             f"DEAL ID: {deal_id} ({deal_name})\n"
             f"USER QUESTION: {question}\n\n"
-            f"HINDSIGHT MEMORY EVIDENCE:\n{context_str}\n\n"
-            "Provide a direct, grounded answer with clear action recommendations."
+            f"{normalized_context}\n\n"
+            "Provide a grounded answer citing relevant memory facts where applicable."
         )
 
         answer = await llm_service.generate_completion(system_prompt, user_prompt)
@@ -138,22 +172,68 @@ class DealAgent:
         context: str = "sales meeting"
     ) -> Dict[str, Any]:
         """
-        1. Save interaction to SQLite DB
-        2. Retain interaction in Hindsight bank
+        1. Store interaction metadata in SQLite DB
+        2. Retain interaction in Hindsight bank with structured type tag
         """
+        deal = get_deal_db(deal_id)
+        if not deal:
+            raise HTTPException(status_code=404, detail=f"Deal '{deal_id}' not found.")
+
         db_record = add_interaction_db(deal_id, type, date, title, transcript, context)
 
-        full_content = f"Date: {date}\nTitle: {title}\nType: {type}\n\nTranscript / Content:\n{transcript}"
+        formatted_content = (
+            f"[{type.upper()}] Date: {date} | Title: {title}\n"
+            f"Transcript & Notes:\n{transcript}"
+        )
 
-        retain_res = await hindsight_service.retain_interaction(
+        retain_res = await hindsight_service.retain_memory(
             deal_id=deal_id,
-            content=full_content,
-            context=f"{type} - {context}",
+            content=formatted_content,
+            context=f"INTERACTION - {type}",
             metadata={"date": date, "title": title, "type": type}
         )
 
         return {
             "interaction": db_record,
+            "hindsight_retention": retain_res
+        }
+
+    async def record_outcome_and_learn(
+        self,
+        deal_id: str,
+        action_taken: str,
+        result: str,
+        impact: str = "positive",
+        notes: str = ""
+    ) -> Dict[str, Any]:
+        """
+        1. Store outcome metadata in SQLite database
+        2. Retain structured OUTCOME & LEARNING in Hindsight memory bank
+        3. Make retrievable for future meeting briefs and strategic decision making
+        """
+        deal = get_deal_db(deal_id)
+        if not deal:
+            raise HTTPException(status_code=404, detail=f"Deal '{deal_id}' not found.")
+
+        db_record = add_outcome_db(deal_id, action_taken, result, impact, notes)
+
+        structured_outcome = (
+            f"[OUTCOME & LEARNING]\n"
+            f"Action Taken by Salesperson: {action_taken}\n"
+            f"Customer Result / Response: {result}\n"
+            f"Impact Assessment: {impact.upper()}\n"
+            f"Strategic Notes: {notes}"
+        )
+
+        retain_res = await hindsight_service.retain_memory(
+            deal_id=deal_id,
+            content=structured_outcome,
+            context="OUTCOME - learning and approach result",
+            metadata={"type": "outcome", "impact": impact}
+        )
+
+        return {
+            "outcome": db_record,
             "hindsight_retention": retain_res
         }
 

@@ -15,5 +15,6 @@ class Settings:
     HINDSIGHT_BASE_URL: str = os.getenv("HINDSIGHT_BASE_URL", "https://api.hindsight.vectorize.io")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     DATABASE_PATH: str = str(root_dir / "deal_intelligence.db")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 settings = Settings()

@@ -7,12 +7,15 @@ import {
   MessageSquareText,
   Calendar,
   Database,
-  Search,
-  CheckCircle2,
-  TrendingUp,
   Briefcase
 } from 'lucide-react';
-import { fetchDeals, createDeal, fetchInteractions, fetchMeetingBrief } from './services/api';
+import {
+  fetchHealth,
+  fetchDeals,
+  createDeal,
+  fetchInteractions,
+  fetchMeetingBrief
+} from './services/api';
 import DealCard from './components/DealCard';
 import MeetingBriefView from './components/MeetingBriefView';
 import AskAgentChat from './components/AskAgentChat';
@@ -25,8 +28,11 @@ export default function App() {
   const [selectedDeal, setSelectedDeal] = useState(null);
   const [activeTab, setActiveTab] = useState('brief');
 
+  const [health, setHealth] = useState({ api: 'checking', hindsight: 'checking', llm: 'checking' });
+
   const [briefData, setBriefData] = useState(null);
   const [briefLoading, setBriefLoading] = useState(false);
+  const [briefError, setBriefError] = useState(null);
 
   const [interactions, setInteractions] = useState([]);
   const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
@@ -39,6 +45,11 @@ export default function App() {
   const [newStage, setNewStage] = useState('Discovery');
   const [newBudget, setNewBudget] = useState('₹100,000');
   const [newSummary, setNewSummary] = useState('');
+
+  const checkStatus = async () => {
+    const status = await fetchHealth();
+    setHealth(status);
+  };
 
   const loadDeals = async () => {
     try {
@@ -53,13 +64,13 @@ export default function App() {
   };
 
   useEffect(() => {
+    checkStatus();
     loadDeals();
   }, []);
 
   const loadDealData = async (deal) => {
     if (!deal) return;
 
-    // Load interactions
     try {
       const inters = await fetchInteractions(deal.id);
       setInteractions(inters);
@@ -67,17 +78,18 @@ export default function App() {
       console.error(e);
     }
 
-    // Auto-generate meeting brief if empty
     loadBrief(deal.id);
   };
 
   const loadBrief = async (dealId) => {
     setBriefLoading(true);
+    setBriefError(null);
     try {
       const data = await fetchMeetingBrief(dealId);
       setBriefData(data);
     } catch (e) {
-      console.error(e);
+      setBriefError(e.message || 'Unable to generate brief from Hindsight memory');
+      setBriefData(null);
     } finally {
       setBriefLoading(false);
     }
@@ -109,9 +121,11 @@ export default function App() {
       setNewClientName('');
       setNewSummary('');
     } catch (e) {
-      alert('Failed to create deal');
+      alert(`Failed to create deal: ${e.message}`);
     }
   };
+
+  const isHindsightConnected = health.hindsight === 'healthy';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -136,11 +150,23 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Real Health Indicator Badge */}
             <div className="hidden sm:flex items-center gap-2 text-xs bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isHindsightConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'
+                }`}
+              ></span>
               <span className="text-slate-300 font-medium">Hindsight Memory Engine:</span>
-              <span className="text-emerald-400 font-semibold">Active</span>
+              <span
+                className={`font-semibold ${
+                  isHindsightConnected ? 'text-emerald-400' : 'text-rose-400'
+                }`}
+              >
+                {isHindsightConnected ? 'Connected' : 'Offline'}
+              </span>
             </div>
+
             <button
               onClick={() => setIsAddDealModalOpen(true)}
               className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-xs flex items-center gap-1.5 shadow-lg shadow-blue-500/20 transition-colors"
@@ -200,7 +226,7 @@ export default function App() {
                     onClick={() => setIsInteractionModalOpen(true)}
                     className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl text-xs flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20"
                   >
-                    <Plus className="w-4 h-4" /> Add Meeting Transcript
+                    <Plus className="w-4 h-4" /> Add Interaction / Outcome
                   </button>
                 </div>
               </div>
@@ -210,7 +236,7 @@ export default function App() {
                 {[
                   { id: 'brief', label: 'Meeting Brief', icon: Sparkles },
                   { id: 'chat', label: 'Ask Deal Agent', icon: MessageSquareText },
-                  { id: 'timeline', label: 'Interactions & Timeline', icon: Calendar },
+                  { id: 'timeline', label: 'Interactions & Outcomes', icon: Calendar },
                   { id: 'memories', label: 'Hindsight Memory Evidence', icon: Database }
                 ].map((tab) => {
                   const Icon = tab.icon;
@@ -237,6 +263,7 @@ export default function App() {
                   <MeetingBriefView
                     briefData={briefData}
                     loading={briefLoading}
+                    error={briefError}
                     onRefresh={() => loadBrief(selectedDeal.id)}
                   />
                 )}
@@ -250,6 +277,7 @@ export default function App() {
 
                 {activeTab === 'timeline' && (
                   <TimelineView
+                    dealId={selectedDeal.id}
                     interactions={interactions}
                     onAddClick={() => setIsInteractionModalOpen(true)}
                   />

@@ -1,8 +1,14 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.database import init_db, list_deals_db, create_or_update_deal_db, add_interaction_db
+from backend.config import settings
+from backend.database import init_db, list_deals_db, create_or_update_deal_db
 from backend.api import deals, interactions, agent
 from backend.services.hindsight_service import hindsight_service
+from backend.services.llm_service import llm_service
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("deal_intelligence")
 
 app = FastAPI(
     title="Deal Intelligence Sales Agent API",
@@ -10,10 +16,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for React frontend
+# Configure explicit CORS origins
+allowed_origins = [
+    settings.FRONTEND_URL.rstrip("/"),
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,10 +40,9 @@ app.include_router(agent.router)
 async def startup_event():
     init_db()
 
-    # Seed default realistic demo deals if DB is empty
     existing_deals = list_deals_db()
     if not existing_deals:
-        print("Seeding demo deals...")
+        logger.info("Seeding initial demo deals...")
         demo_deals = [
             {
                 "id": "acme-corp",
@@ -69,14 +81,28 @@ async def startup_event():
             try:
                 await hindsight_service.ensure_bank_exists(d["id"], d["name"])
             except Exception as e:
-                print(f"Error initializing Hindsight bank for {d['id']}: {e}")
+                logger.warning(f"Note on Hindsight bank setup for {d['id']}: {e}")
+
+@app.get("/api/health")
+async def health_check():
+    """
+    Real health check endpoint inspecting status of API, Hindsight, and LLM provider.
+    """
+    hindsight_status = await hindsight_service.check_health()
+    llm_status = await llm_service.check_health()
+
+    return {
+        "api": "healthy",
+        "hindsight": hindsight_status,
+        "llm": llm_status
+    }
 
 @app.get("/")
 async def root():
     return {
         "status": "online",
         "app": "Deal Intelligence Sales Agent",
-        "hindsight_memory": "active"
+        "docs": "/docs"
     }
 
 if __name__ == "__main__":

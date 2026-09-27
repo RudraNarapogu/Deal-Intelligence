@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Bot, User, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Send, Bot, User, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { askAgent } from '../services/api';
 
 export default function AskAgentChat({ dealId, dealName }) {
@@ -14,9 +14,9 @@ export default function AskAgentChat({ dealId, dealName }) {
   const [loading, setLoading] = useState(false);
 
   const sampleQuestions = [
-    'What are Acme\'s current objections?',
-    'What pricing and budget details were discussed?',
-    'What should I emphasize in tomorrow\'s meeting?'
+    `What are ${dealName}'s current objections?`,
+    `What pricing and budget details were discussed for ${dealName}?`,
+    `What should I emphasize in tomorrow's ${dealName} meeting?`
   ];
 
   const handleSend = async (questionText) => {
@@ -43,8 +43,9 @@ export default function AskAgentChat({ dealId, dealName }) {
         ...prev,
         {
           role: 'assistant',
-          content: 'Error querying Deal Agent. Please ensure backend is running.',
-          evidence: []
+          content: `⚠️ Error: ${err.message || 'Unable to query Deal Agent.'}`,
+          evidence: [],
+          isError: true
         }
       ]);
     } finally {
@@ -84,11 +85,15 @@ export default function AskAgentChat({ dealId, dealName }) {
               className={`p-2 rounded-lg text-white shrink-0 ${
                 msg.role === 'user'
                   ? 'bg-blue-600'
+                  : msg.isError
+                  ? 'bg-rose-900/80 border border-rose-700'
                   : 'bg-slate-800 border border-slate-700'
               }`}
             >
               {msg.role === 'user' ? (
                 <User className="w-4 h-4" />
+              ) : msg.isError ? (
+                <AlertTriangle className="w-4 h-4 text-rose-400" />
               ) : (
                 <Bot className="w-4 h-4 text-blue-400" />
               )}
@@ -98,6 +103,8 @@ export default function AskAgentChat({ dealId, dealName }) {
               className={`max-w-[80%] rounded-xl p-4 text-sm leading-relaxed ${
                 msg.role === 'user'
                   ? 'bg-blue-600/90 text-white font-medium'
+                  : msg.isError
+                  ? 'bg-rose-950/80 text-rose-200 border border-rose-800'
                   : 'bg-slate-800/90 text-slate-200 border border-slate-700/70'
               }`}
             >
@@ -131,7 +138,7 @@ export default function AskAgentChat({ dealId, dealName }) {
               <Bot className="w-4 h-4 text-blue-400 animate-pulse" />
             </div>
             <div className="bg-slate-800/60 text-slate-400 text-xs px-4 py-2 rounded-xl border border-slate-700/50">
-              Recalling memories and generating grounded reasoning...
+              Recalling Hindsight memories and reasoning with LLM...
             </div>
           </div>
         )}

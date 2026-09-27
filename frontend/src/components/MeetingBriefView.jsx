@@ -1,13 +1,31 @@
 import React from 'react';
-import { Sparkles, BrainCircuit, RefreshCw, CheckCircle2, ShieldAlert, Target } from 'lucide-react';
+import { Sparkles, BrainCircuit, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
 
-export default function MeetingBriefView({ briefData, loading, onRefresh }) {
+export default function MeetingBriefView({ briefData, loading, error, onRefresh }) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-slate-900/40 rounded-xl border border-slate-800">
         <RefreshCw className="w-8 h-8 text-blue-400 animate-spin mb-3" />
         <p className="text-slate-300 font-medium">Recalling Hindsight deal memory & generating brief...</p>
         <p className="text-xs text-slate-500 mt-1">Analyzing facts, objections, entity graph & temporal momentum</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 bg-rose-950/40 rounded-xl border border-rose-800/80 text-rose-200 text-sm space-y-3">
+        <div className="flex items-center gap-2 text-rose-400 font-semibold">
+          <AlertTriangle className="w-5 h-5" />
+          <span>Unable to generate Meeting Brief</span>
+        </div>
+        <p className="text-xs text-rose-300/90 leading-relaxed">{error}</p>
+        <button
+          onClick={onRefresh}
+          className="px-3.5 py-1.5 bg-rose-900/60 hover:bg-rose-800/80 text-rose-100 rounded-lg text-xs font-medium border border-rose-700/60 flex items-center gap-1.5"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Retry Brief Generation
+        </button>
       </div>
     );
   }
@@ -84,6 +102,8 @@ export default function MeetingBriefView({ briefData, loading, onRefresh }) {
                     <span className="text-blue-400 font-medium">{item.type}</span>
                     <span>•</span>
                     <span>{item.timestamp}</span>
+                    <span>•</span>
+                    <span className="text-slate-500">{item.source || 'Hindsight Bank'}</span>
                   </div>
                 </div>
               </div>

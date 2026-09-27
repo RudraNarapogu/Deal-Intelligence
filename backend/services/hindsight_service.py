@@ -1,8 +1,11 @@
+import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from fastapi import HTTPException
 from hindsight_client import Hindsight
 from backend.config import settings
-from backend.database import add_local_memory_db, get_local_memories_db, get_interactions_db
+
+logger = logging.getLogger("deal_intelligence.hindsight")
 
 SALES_RETAIN_MISSION = """
 Focus on information relevant to enterprise sales deals:
@@ -12,7 +15,8 @@ Focus on information relevant to enterprise sales deals:
 - Key stakeholders, decision-makers, internal champions
 - Competitors mentioned and comparative pros/cons
 - Commitments made by either party and action items
-- Outcomes of previous approaches (e.g. '10-day deployment pitch accepted')
+- Actions taken by the salesperson and explicit outcomes
+- Strategic learnings from past approaches (what worked, what failed)
 - Recent changes in customer priorities or deal momentum
 Deprioritize generic greetings and non-business small talk.
 """
@@ -25,10 +29,16 @@ Identify what worked, what failed, open risks, and recommended immediate next st
 
 class HindsightService:
     def __init__(self):
-        self.client = Hindsight(
-            base_url=settings.HINDSIGHT_BASE_URL,
-            api_key=settings.HINDSIGHT_API_KEY
-        )
+        self.base_url = settings.HINDSIGHT_BASE_URL
+
+    def _get_client(self) -> Hindsight:
+        key = settings.HINDSIGHT_API_KEY.strip()
+        if not key:
+            raise HTTPException(
+                status_code=503,
+                detail="Hindsight API key not configured. Long-term deal memory service unavailable."
+            )
+        return Hindsight(base_url=self.base_url, api_key=key)
 
     def _get_bank_id(self, deal_id: str) -> str:
         clean_id = str(deal_id).lower().strip().replace(" ", "-").replace("_", "-")
@@ -36,10 +46,26 @@ class HindsightService:
             clean_id = f"deal-{clean_id}"
         return clean_id
 
+    async def check_health(self) -> str:
+        """
+        Check real connectivity to Hindsight API endpoint.
+        Returns 'healthy' or 'unhealthy'.
+        """
+        try:
+            client = self._get_client()
+            version = await client.aget_version()
+            if version:
+                return "healthy"
+            return "unhealthy"
+        except Exception as e:
+            logger.warning(f"Hindsight Health Check Failed: {str(e)}")
+            return "unhealthy"
+
     async def ensure_bank_exists(self, deal_id: str, deal_name: str = "") -> str:
         bank_id = self._get_bank_id(deal_id)
+        client = self._get_client()
         try:
-            await self.client.acreate_bank(
+            await client.acreate_bank(
                 bank_id=bank_id,
                 name=deal_name or f"Deal Memory: {deal_id}",
                 retain_mission=SALES_RETAIN_MISSION,
@@ -49,14 +75,15 @@ class HindsightService:
                 enable_graph_retrieval=True,
                 enable_reranking=True
             )
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Bank {bank_id} creation response: {e}")
             try:
-                await self.client.aset_mission(bank_id=bank_id, mission=SALES_RETAIN_MISSION)
+                await client.aset_mission(bank_id=bank_id, mission=SALES_RETAIN_MISSION)
             except Exception:
                 pass
         return bank_id
 
-    async def retain_interaction(
+    async def retain_memory(
         self,
         deal_id: str,
         content: str,
@@ -65,18 +92,9 @@ class HindsightService:
         metadata: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         bank_id = await self.ensure_bank_exists(deal_id)
-        ts_str = (timestamp or datetime.utcnow()).strftime("%Y-%m-%d")
-
-        # Save to local database memory engine for fallback
-        add_local_memory_db(
-            deal_id=deal_id,
-            text=f"[{context.upper()}] {content}",
-            category=context,
-            timestamp=ts_str
-        )
-
+        client = self._get_client()
         try:
-            response = await self.client.aretain(
+            response = await client.aretain(
                 bank_id=bank_id,
                 content=content,
                 context=context,
@@ -85,14 +103,11 @@ class HindsightService:
             )
             return response.to_dict() if hasattr(response, "to_dict") else {"status": "retained", "raw": str(response)}
         except Exception as e:
-            # Return graceful local memory retention response
-            return {
-                "status": "retained_local_memory",
-                "bank_id": bank_id,
-                "deal_id": deal_id,
-                "extracted_fact": content[:200],
-                "note": f"Saved in deal memory bank ({str(e)})"
-            }
+            logger.error(f"Hindsight retain failed for deal '{deal_id}': {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Hindsight Memory Engine retain operation failed: {str(e)}"
+            )
 
     async def recall_deal_memory(
         self,
@@ -102,9 +117,10 @@ class HindsightService:
         max_tokens: int = 4096
     ) -> Dict[str, Any]:
         bank_id = await self.ensure_bank_exists(deal_id)
+        client = self._get_client()
 
         try:
-            response = await self.client.arecall(
+            response = await client.arecall(
                 bank_id=bank_id,
                 query=query,
                 budget=budget,
@@ -119,35 +135,11 @@ class HindsightService:
                 return response.to_dict()
             return {"results": [{"text": str(response)}]}
         except Exception as e:
-            # Fallback memory recall from interactions & local memories
-            interactions = get_interactions_db(deal_id)
-            local_memories = get_local_memories_db(deal_id)
-
-            facts = []
-            for m in local_memories:
-                facts.append({
-                    "id": f"mem-{m['id']}",
-                    "text": m["text"],
-                    "category": m["category"],
-                    "timestamp": m["timestamp"]
-                })
-
-            for inter in interactions:
-                facts.append({
-                    "id": f"inter-{inter['id']}",
-                    "text": f"[{inter['type'].upper()} on {inter['date']}] {inter['title']}: {inter['transcript']}",
-                    "category": inter["type"],
-                    "timestamp": inter["date"]
-                })
-
-            return {
-                "bank_id": bank_id,
-                "query": query,
-                "results": facts,
-                "facts": facts,
-                "source": "Hindsight Memory Bank",
-                "notice": f"Cloud query note: {str(e)}"
-            }
+            logger.error(f"Hindsight recall failed for deal '{deal_id}': {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Hindsight Memory Engine recall operation failed: {str(e)}"
+            )
 
     async def reflect_on_deal(
         self,
@@ -156,9 +148,10 @@ class HindsightService:
         context: Optional[str] = None
     ) -> Dict[str, Any]:
         bank_id = await self.ensure_bank_exists(deal_id)
+        client = self._get_client()
 
         try:
-            response = await self.client.areflect(
+            response = await client.areflect(
                 bank_id=bank_id,
                 query=query,
                 context=context or "Enterprise sales deal analysis",
@@ -170,13 +163,11 @@ class HindsightService:
                 return response.to_dict()
             return {"reflection": str(response)}
         except Exception as e:
-            memories = get_local_memories_db(deal_id)
-            return {
-                "bank_id": bank_id,
-                "query": query,
-                "reflection": f"Reflected on {len(memories)} memories for deal '{deal_id}'. Key priorities and historical facts analyzed.",
-                "notice": str(e)
-            }
+            logger.error(f"Hindsight reflect failed for deal '{deal_id}': {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Hindsight Memory Engine reflect operation failed: {str(e)}"
+            )
 
     async def list_deal_memories(
         self,
@@ -184,9 +175,10 @@ class HindsightService:
         limit: int = 50
     ) -> Dict[str, Any]:
         bank_id = await self.ensure_bank_exists(deal_id)
+        client = self._get_client()
 
         try:
-            response = await self.client.alist_memories(
+            response = await client.alist_memories(
                 bank_id=bank_id,
                 limit=limit
             )
@@ -195,14 +187,11 @@ class HindsightService:
             elif hasattr(response, "to_dict"):
                 return response.to_dict()
             return {"memories": str(response)}
-        except Exception:
-            local_m = get_local_memories_db(deal_id)
-            interactions = get_interactions_db(deal_id)
-            mem_list = []
-            for m in local_m:
-                mem_list.append({"id": m["id"], "text": m["text"], "timestamp": m["timestamp"], "type": m["category"]})
-            for i in interactions:
-                mem_list.append({"id": f"i-{i['id']}", "text": f"{i['title']}: {i['transcript']}", "timestamp": i["date"], "type": i["type"]})
-            return {"memories": mem_list}
+        except Exception as e:
+            logger.error(f"Hindsight list_memories failed for deal '{deal_id}': {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Hindsight Memory Engine list_memories operation failed: {str(e)}"
+            )
 
 hindsight_service = HindsightService()

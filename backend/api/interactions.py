@@ -9,14 +9,14 @@ router = APIRouter(prefix="/api/deals/{deal_id}/interactions", tags=["interactio
 async def list_interactions(deal_id: str):
     deal = get_deal_db(deal_id)
     if not deal:
-        raise HTTPException(status_code=404, detail="Deal not found")
+        raise HTTPException(status_code=404, detail=f"Deal '{deal_id}' not found")
     return get_interactions_db(deal_id)
 
 @router.post("")
 async def create_interaction(deal_id: str, payload: InteractionCreate):
     deal = get_deal_db(deal_id)
     if not deal:
-        raise HTTPException(status_code=404, detail="Deal not found")
+        raise HTTPException(status_code=404, detail=f"Deal '{deal_id}' not found")
 
     result = await deal_agent.record_interaction_and_learn(
         deal_id=deal_id,
