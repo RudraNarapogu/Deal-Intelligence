@@ -96,10 +96,10 @@ try:
     invalid_inter_res = client.post("/api/deals/e2e-acme/interactions", json={
         "type": "meeting",
         "date": "invalid-date-format-xyz",
-        "transcript": "ab"
+        "transcript": "This is a sufficiently long transcript for validation."
     })
     assert invalid_inter_res.status_code == 422, f"Expected 422, got {invalid_inter_res.status_code}"
-    print("✓ Invalid Interaction 422 Assertion Passed")
+    print("✓ Invalid Interaction Date 422 Assertion Passed")
 
     print("\n" + "=" * 60)
     print("🎉 ALL END-TO-END ASSERTIONS PASSED SUCCESSFULLY!")

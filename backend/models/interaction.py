@@ -1,10 +1,10 @@
 from datetime import date as DateType
-from typing import Optional, Literal, Union
+from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
 class InteractionCreate(BaseModel):
     type: str = Field(..., min_length=1, description="Type of interaction (meeting, email, call, note)")
-    date: Union[DateType, str] = Field(..., description="Date in YYYY-MM-DD format")
+    date: DateType = Field(..., description="Date in YYYY-MM-DD format")
     title: Optional[str] = Field("", description="Title or topic")
     transcript: str = Field(..., min_length=3, description="Full transcript or interaction text")
     context: Optional[str] = Field("sales meeting", description="Sales context")
