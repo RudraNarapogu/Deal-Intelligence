@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deal Intelligence — Comparison Demo (With vs Without Hindsight Memory)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #020617;
+      color: #f8fafc;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Header Bar -->
+  <header class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-gradient-to-tr from-purple-600 to-blue-500 rounded-xl shadow-lg shadow-purple-500/20">
+          <i data-lucide="brain-circuit" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg text-slate-100 tracking-tight flex items-center gap-2">
+            Deal Intelligence
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+              Comparison Mode
+            </span>
+          </h1>
+          <p class="text-xs text-slate-400">
+            Side-by-Side Impact Analysis: Standard Stateless LLM vs Hindsight Memory Agent
+          </p>
+        </div>
+      </div>
+
+      <!-- Mode Toggle Switch -->
+      <div class="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+        <button id="btn-without" onclick="setMode('without')" class="px-4 py-2 rounded-lg transition-all bg-rose-600 text-white shadow">
+          ❌ Without Hindsight Memory (Stateless LLM)
+        </button>
+        <button id="btn-with" onclick="setMode('with')" class="px-4 py-2 rounded-lg transition-all text-slate-400 hover:text-white">
+          ⚡ With Hindsight Memory Agent
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Banner Warning Bar -->
+  <div id="mode-banner" class="bg-rose-950/60 border-b border-rose-800/60 px-6 py-2.5 text-xs text-rose-200 flex items-center justify-between">
+    <div class="max-w-7xl mx-auto w-full flex items-center justify-between">
+      <span class="flex items-center gap-2 font-medium">
+        <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i>
+        Currently Viewing: <strong class="text-rose-300">Standard Stateless LLM (Without Hindsight Memory)</strong>.
+        The AI has NO recollection of past sales meetings, budget updates, or objections.
+      </span>
+      <span class="text-[11px] text-rose-400 font-mono bg-rose-900/60 px-2 py-0.5 rounded border border-rose-700/50">
+        Memory Bank: DISABLED
+      </span>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-6 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Left Sidebar: Deal Selector -->
+    <div class="lg:col-span-4 space-y-4">
+      <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+        <i data-lucide="briefcase" class="w-3.5 h-3.5 text-blue-400"></i> Active Deals Portfolio (2)
+      </h2>
+
+      <!-- Deal Card 1: Acme Corp -->
+      <div id="card-acme" onclick="selectDeal('acme')" class="p-5 rounded-xl border transition-all cursor-pointer bg-slate-900/90 border-blue-500 ring-1 ring-blue-500/30">
+        <div class="flex items-start justify-between mb-2">
+          <div>
+            <h3 class="font-semibold text-slate-100 text-base">Acme Corp</h3>
+            <p class="text-xs text-slate-400">Acme Corporation • Invoice Automation</p>
+          </div>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+            Evaluation
+          </span>
+        </div>
+        <p class="text-xs text-slate-300 line-clamp-2 mt-2">
+          Enterprise invoice processing & SAP ERP integration across 3 regional hubs.
+        </p>
+        <div class="flex items-center justify-between text-xs pt-3 mt-3 border-t border-slate-800 text-slate-400">
+          <span>Target: <strong class="text-emerald-400">₹80,000</strong></span>
+          <span class="text-blue-400 font-medium flex items-center gap-1">Selected <i data-lucide="arrow-right" class="w-3 h-3"></i></span>
+        </div>
+      </div>
+
+      <!-- Deal Card 2: Zenith Ltd -->
+      <div id="card-zenith" onclick="selectDeal('zenith')" class="p-5 rounded-xl border transition-all cursor-pointer bg-slate-900/40 border-slate-800 hover:border-slate-700">
+        <div class="flex items-start justify-between mb-2">
+          <div>
+            <h3 class="font-semibold text-slate-100 text-base">Zenith Ltd</h3>
+            <p class="text-xs text-slate-400">Zenith Logistics • Fleet Management</p>
+          </div>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+            Negotiation
+          </span>
+        </div>
+        <p class="text-xs text-slate-300 line-clamp-2 mt-2">
+          500 delivery trucks telematics tracking & driver mobile app offline sync.
+        </p>
+        <div class="flex items-center justify-between text-xs pt-3 mt-3 border-t border-slate-800 text-slate-400">
+          <span>Target: <strong class="text-emerald-400">₹1,50,000</strong></span>
+          <span class="text-slate-500">Select</span>
+        </div>
+      </div>
+
+      <!-- Feature Comparison Matrix Box -->
+      <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-3 text-xs">
+        <h3 class="font-bold text-slate-200 text-sm flex items-center gap-2">
+          <i data-lucide="scale" class="w-4 h-4 text-purple-400"></i> Why Long-Term Memory Matters
+        </h3>
+        <div class="space-y-2 text-slate-300 leading-relaxed">
+          <div class="p-2.5 bg-rose-950/40 rounded-lg border border-rose-900/50">
+            <strong class="text-rose-400 block mb-0.5">Without Hindsight Memory:</strong>
+            Standard LLM suffers from context loss, forgets budget changes over time, cannot recall CSO security objections, and hallucinates generic advice.
+          </div>
+          <div class="p-2.5 bg-emerald-950/40 rounded-lg border border-emerald-900/50">
+            <strong class="text-emerald-400 block mb-0.5">With Hindsight Memory Agent:</strong>
+            Persistent deal bank, temporal tracking (understands ₹120k -> ₹80k budget evolution), cites verifiable memory facts, and learns from meeting outcomes.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Workspace Tabs -->
+    <div class="lg:col-span-8 space-y-5">
+
+      <!-- Selected Deal Workspace Header -->
+      <div class="p-6 bg-slate-900/80 rounded-2xl border border-slate-800 flex items-center justify-between">
+        <div>
+          <h2 id="deal-title" class="text-2xl font-bold text-slate-100">Acme Corp</h2>
+          <p id="deal-subtitle" class="text-xs text-slate-400 mt-1">
+            Client: Acme Corporation • Memory Bank: <code id="bank-badge" class="text-rose-400 font-mono">deal-acme-corp (DISABLED)</code>
+          </p>
+        </div>
+        <div class="text-right">
+          <span class="text-[11px] text-slate-400 uppercase tracking-wider block">Target Value</span>
+          <span id="deal-budget" class="text-lg font-bold text-emerald-400">₹80,000</span>
+        </div>
+      </div>
+
+      <!-- Tab Buttons -->
+      <div class="flex items-center gap-2 border-b border-slate-800 pb-1 text-xs font-semibold">
+        <button id="tab-brief-btn" onclick="setTab('brief')" class="px-4 py-2.5 rounded-lg flex items-center gap-2 bg-blue-600/20 text-blue-400 border border-blue-500/30">
+          <i data-lucide="sparkles" class="w-4 h-4"></i> Meeting Prep Brief
+        </button>
+        <button id="tab-chat-btn" onclick="setTab('chat')" class="px-4 py-2.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200">
+          <i data-lucide="message-square" class="w-4 h-4"></i> AI Chat Assistant
+        </button>
+        <button id="tab-evidence-btn" onclick="setTab('evidence')" class="px-4 py-2.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200">
+          <i data-lucide="database" class="w-4 h-4"></i> Memory Evidence
+        </button>
+      </div>
+
+      <!-- TAB 1: MEETING BRIEF VIEW -->
+      <div id="tab-brief-content" class="space-y-5">
+        <div id="brief-box" class="p-6 bg-slate-900/90 rounded-2xl border border-slate-800 text-slate-200 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+          <!-- Content dynamically set by JS -->
+        </div>
+
+        <div id="evidence-summary-box" class="p-5 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-3">
+          <!-- Evidence status dynamically set by JS -->
+        </div>
+      </div>
+
+      <!-- TAB 2: CHAT ASSISTANT -->
+      <div id="tab-chat-content" class="hidden space-y-4">
+        <div class="flex flex-col h-[520px] bg-slate-900/80 rounded-2xl border border-slate-800 overflow-hidden">
+          <div class="p-3 bg-slate-950 border-b border-slate-800 text-xs text-slate-400 flex items-center justify-between">
+            <span>Ask questions about requirements, objections, budget, or past outcomes</span>
+            <span id="chat-mode-badge" class="text-rose-400 font-mono text-[11px] px-2 py-0.5 rounded bg-rose-950 border border-rose-800">
+              Stateless Mode (No Memory)
+            </span>
+          </div>
+
+          <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+            <!-- Messages dynamically set -->
+          </div>
+
+          <div class="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2">
+            <input id="chat-input" type="text" aria-label="Ask AI Assistant" placeholder="Ask AI Assistant..." class="flex-1 bg-slate-900 border border-slate-800 text-slate-100 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500" onkeydown="if(event.key==='Enter') sendChat()">
+            <button onclick="sendChat()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-xs">
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: MEMORY EVIDENCE INSPECTOR -->
+      <div id="tab-evidence-content" class="hidden space-y-4">
+        <div id="memory-inspector-box" class="p-6 bg-slate-900/90 rounded-2xl border border-slate-800 text-xs space-y-3">
+          <!-- Inspector content set by JS -->
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Interactive JavaScript Logic -->
+  <script>
+    let currentMode = 'without'; // 'without' or 'with'
+    let currentDeal = 'acme';   // 'acme' or 'zenith'
+    let currentTab = 'brief';   // 'brief', 'chat', 'evidence'
+
+    const DATA = {
+      acme: {
+        name: 'Acme Corp',
+        subtitle: 'Acme Corporation • Invoice Automation',
+        budget: '₹80,000',
+        withoutBrief: `# 📋 EXECUTIVE BRIEF (WITHOUT HINDSIGHT MEMORY)
+⚠️ Generated using Standard Stateless LLM (No Long-Term Memory)
+
+### 1. Deal Status
+- Status: General Evaluation Phase
+- Note: System has no stored memory of past meeting dates or stakeholder agreements.
+
+### 2. Key Requirements
+- Customer needs invoice processing software.
+- Specifics: Unknown (Past meeting transcripts detailing 10,000 invoices/month and SAP ECC 6.0 REST API connector specifications were NOT retained).
+
+### 3. Primary Objections & Risks
+- Objections: No objection history available.
+- ❌ MISSED CRITICAL FACT: CSO David Vance's security objection regarding multi-tenant cloud storage and SOC2 whitepaper requirements was forgotten.
+
+### 4. Commercial & Budget
+- Budget: Initial template value ~₹1,20,000.
+- ❌ MISSED EVOLUTION: Failed to track that CFO Thomas Wright reduced the budget cap to ₹80,000.
+
+### 5. Recommended Priorities
+- Recommend sending generic software brochure.
+- Schedule introductory discovery meeting (repeating Phase 1 work).
+
+---
+*Warning: Stateless LLM cannot retrieve previous meeting transcripts or track deal evolution over time.*`,
+
+        withBrief: `# 📋 EXECUTIVE BRIEF (WITH HINDSIGHT MEMORY)
+⚡ Grounded strictly in Hindsight Memory Bank (bank: deal-acme-corp)
+
+### 1. Deal Status & Stage
+- Stage: Final Negotiation / Close Ready
+- Key Milestone: 10-day deployment schedule approved by VP Finance Sarah Jenkins.
+
+### 2. Key Requirements
+- Automated extraction for 10,000 monthly invoices across 3 regional offices.
+- Native bi-directional REST API connector for SAP ECC 6.0 ERP.
+- Immutable audit logging & 7-year document archiving for tax compliance.
+
+### 3. Primary Unresolved Objections
+- Security Clearance: CSO David Vance requested formal SOC2 Type II security architecture whitepaper and encryption proof (AES-256 at rest).
+- Resolved Objection: 10-day rapid deployment pitch was accepted enthusiastically by Sarah Jenkins.
+
+### 4. Commercial & Budget Evolution
+- Temporal Tracking: Initial ₹1,20,000 -> CFO Thomas Wright cap ₹1,00,000 -> Final approved Year 1 budget: ₹80,000.
+- Competitor Analysis: Competitor InvoiceFlow offered ₹70,000 but lacks 3-way PO matching and SOC2 security certification.
+
+### 5. Recommended Priorities
+1. **Deliver SOC2 Whitepaper**: Hand over technical security whitepaper to CSO David Vance to finalize IT security clearance.
+2. **Reaffirm 10-Day Deployment**: Confirm SAP REST API staging table setup with IT Lead Michael Chang.
+3. **Close Contract**: Execute Year 1 agreement at ₹80,000.
+
+---
+*Verified by Hindsight Memory Engine: 25 Historical Memories Retained & Cites Grounded Evidence.*`,
+
+        withoutChat: [
+          { role: 'assistant', content: 'Hello! I am a standard stateless LLM. I do NOT have access to past meeting transcripts or Hindsight memory.' },
+          { role: 'user', content: 'What budget did Acme approve and what did David Vance object to?' },
+          { role: 'assistant', content: 'I do not have access to your previous meeting history or notes regarding Acme Corp. Please re-paste the meeting transcript so I can answer your question.' }
+        ],
+
+        withChat: [
+          { role: 'assistant', content: 'Hello! I am your Deal Intelligence Agent for **Acme Corp**. Ask me any question grounded in Hindsight deal memory.' },
+          { role: 'user', content: 'What budget did Acme approve and what did David Vance object to?' },
+          {
+            role: 'assistant',
+            content: `Based on retrieved Hindsight deal memory:
+
+1. **Approved Budget**: VP Finance Sarah Jenkins and CFO Thomas Wright approved a final Year 1 budget of **₹80,000** (reduced down from an initial ₹1,20,000 estimate).
+
+2. **CSO David Vance Objection**: CSO David Vance raised a security objection regarding multi-tenant cloud data storage. He required formal **SOC2 Type II compliance documentation** and AES-256 encryption verification before granting IT clearance.`,
+            evidence: [
+              { id: 1, text: 'Sarah Jenkins confirmed CFO Thomas Wright will sign contract at ₹80,000 for Year 1 provided SOC2 whitepaper is delivered.', timestamp: '2026-09-22', type: 'DECISION' },
+              { id: 2, text: 'CSO David Vance raised multi-tenancy security objection and requested SOC2 whitepaper.', timestamp: '2026-06-25', type: 'OBJECTION' }
+            ]
+          }
+        ]
+      },
+
+      zenith: {
+        name: 'Zenith Ltd',
+        subtitle: 'Zenith Logistics • Fleet Management',
+        budget: '₹1,50,000',
+        withoutBrief: `# 📋 EXECUTIVE BRIEF (WITHOUT HINDSIGHT MEMORY)
+⚠️ Generated using Standard Stateless LLM (No Long-Term Memory)
+
+### 1. Deal Status
+- Status: Early Discovery / General Information
+- Note: No stored historical memory of 500 trucks or regional logistics hubs.
+
+### 2. Key Requirements
+- Customer wants fleet tracking software.
+- Specifics: Unknown (Driver mobile app and OBD-II telematics specs missing).
+
+### 3. Primary Objections
+- Objections: Unknown.
+- ❌ MISSED CRITICAL FACT: Driver adoption and rural highway offline sync objections were forgotten.
+
+### 4. Commercial & Budget
+- Budget: Initial default estimate ~₹2,00,000.
+- ❌ MISSED EVOLUTION: Failed to track that budget was negotiated down to ₹1,50,000 for 500 vehicles.`,
+
+        withBrief: `# 📋 EXECUTIVE BRIEF (WITH HINDSIGHT MEMORY)
+⚡ Grounded strictly in Hindsight Memory Bank (bank: deal-zenith-ltd)
+
+### 1. Deal Status & Stage
+- Stage: Contract Signing / Closed Won
+- Key Milestone: Offline mobile sync blackout test passed 100%.
+
+### 2. Key Requirements
+- Real-time OBD-II telematics GPS tracking & CAN-bus engine diagnostics for 500 trucks.
+- Driver Android mobile app with mandatory offline-first local SQLite sync for rural corridors.
+- Dynamic route optimization for up to 25 stops per vehicle.
+
+### 3. Primary Objections & Resolution
+- Driver Adoption & Offline Sync: Marcus Vance objected that rural signal loss would corrupt dispatch records.
+- RESOLVED: Conducted live rural blackout simulation demo logging 15 offline stops with 100% instant auto-sync.
+
+### 4. Commercial & Budget Evolution
+- Budget Evolution: Initial ₹2,00,000 -> VP Logistics Ananya Roy cap ₹1,70,000 -> Final 2-year agreement at ₹1,50,000.
+- Competitor: Competitor FleetTrack Pro offered ₹1,40,000 smartphone GPS, but lacked OBD-II engine maintenance telemetry.
+
+### 5. Recommended Priorities
+1. Finalize legal contract sign-off for ₹1,50,000 annual subscription.
+2. Schedule OBD-II dongle shipment across 4 regional logistics hubs.`,
+
+        withoutChat: [
+          { role: 'assistant', content: 'Hello! I am a standard stateless LLM. I do NOT have access to past meeting transcripts or Hindsight memory.' },
+          { role: 'user', content: 'What were Zenith\'s main objections and how did we resolve them?' },
+          { role: 'assistant', content: 'I do not have access to historical interaction records for Zenith Ltd. Please provide past meeting transcripts.' }
+        ],
+
+        withChat: [
+          { role: 'assistant', content: 'Hello! I am your Deal Intelligence Agent for **Zenith Ltd**. Ask me any question grounded in Hindsight deal memory.' },
+          { role: 'user', content: 'What were Zenith\'s main objections and how did we resolve them?' },
+          {
+            role: 'assistant',
+            content: `Based on retrieved Hindsight deal memory:
+
+1. **Offline Mobile Sync Objection**: Marcus Vance objected that driver mobile apps would fail in rural highway zones with weak cellular signal.
+   - **Resolution**: We conducted a live offline blackout simulation test logging 15 delivery stops with 100% instant database sync when reconnected.
+
+2. **Competitor FleetTrack Pro Pricing**: VP Logistics Ananya Roy questioned pricing vs FleetTrack Pro (₹1,40,000).
+   - **Resolution**: Demonstrated that hardware OBD-II engine diagnostic alerts save ₹60,000/year in breakdown expenses, justifying the ₹1,50,000 final agreement.`,
+            evidence: [
+              { id: 1, text: 'Live offline sync demo passed in rural signal blackout simulation. Marcus declared offline sync objection resolved.', timestamp: '2026-09-20', type: 'OUTCOME' },
+              { id: 2, text: 'OBD-II engine diagnostics matrix demonstrated 3.5x higher savings than FleetTrack Pro smartphone app.', timestamp: '2026-09-02', type: 'FACT' }
+            ]
+          }
+        ]
+      }
+    };
+
+    function setMode(mode) {
+      currentMode = mode;
+      const btnWithout = document.getElementById('btn-without');
+      const btnWith = document.getElementById('btn-with');
+      const banner = document.getElementById('mode-banner');
+      const chatModeBadge = document.getElementById('chat-mode-badge');
+
+      if (mode === 'without') {
+        btnWithout.className = 'px-4 py-2 rounded-lg transition-all bg-rose-600 text-white shadow font-semibold';
+        btnWith.className = 'px-4 py-2 rounded-lg transition-all text-slate-400 hover:text-white font-medium';
+        banner.className = 'bg-rose-950/60 border-b border-rose-800/60 px-6 py-2.5 text-xs text-rose-200 flex items-center justify-between';
+        banner.innerHTML = `
+          <div class="max-w-7xl mx-auto w-full flex items-center justify-between">
+            <span class="flex items-center gap-2 font-medium">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i>
+              Currently Viewing: <strong class="text-rose-300">Standard Stateless LLM (Without Hindsight Memory)</strong>.
+              The AI has NO recollection of past sales meetings, budget updates, or objections.
+            </span>
+            <span class="text-[11px] text-rose-400 font-mono bg-rose-900/60 px-2 py-0.5 rounded border border-rose-700/50">Memory Bank: DISABLED</span>
+          </div>
+        `;
+        if (chatModeBadge) {
+          chatModeBadge.className = 'text-rose-400 font-mono text-[11px] px-2 py-0.5 rounded bg-rose-950 border border-rose-800';
+          chatModeBadge.textContent = 'Stateless Mode (No Memory)';
+        }
+      } else {
+        btnWith.className = 'px-4 py-2 rounded-lg transition-all bg-emerald-600 text-white shadow font-semibold';
+        btnWithout.className = 'px-4 py-2 rounded-lg transition-all text-slate-400 hover:text-white font-medium';
+        banner.className = 'bg-emerald-950/60 border-b border-emerald-800/60 px-6 py-2.5 text-xs text-emerald-200 flex items-center justify-between';
+        banner.innerHTML = `
+          <div class="max-w-7xl mx-auto w-full flex items-center justify-between">
+            <span class="flex items-center gap-2 font-medium">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+              Currently Viewing: <strong class="text-emerald-300">Deal Intelligence Agent (With Hindsight Memory)</strong>.
+              Connected to active persistent deal memory bank.
+            </span>
+            <span class="text-[11px] text-emerald-400 font-mono bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-700/50">Memory Bank: ACTIVE</span>
+          </div>
+        `;
+        if (chatModeBadge) {
+          chatModeBadge.className = 'text-emerald-400 font-mono text-[11px] px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800';
+          chatModeBadge.textContent = 'Hindsight RAG Mode (Connected)';
+        }
+      }
+      lucide.createIcons();
+      renderWorkspace();
+    }
+
+    function selectDeal(dealKey) {
+      currentDeal = dealKey;
+      document.getElementById('card-acme').className = dealKey === 'acme'
+        ? 'p-5 rounded-xl border transition-all cursor-pointer bg-slate-900/90 border-blue-500 ring-1 ring-blue-500/30'
+        : 'p-5 rounded-xl border transition-all cursor-pointer bg-slate-900/40 border-slate-800 hover:border-slate-700';
+
+      document.getElementById('card-zenith').className = dealKey === 'zenith'
+        ? 'p-5 rounded-xl border transition-all cursor-pointer bg-slate-900/90 border-blue-500 ring-1 ring-blue-500/30'
+        : 'p-5 rounded-xl border transition-all cursor-pointer bg-slate-900/40 border-slate-800 hover:border-slate-700';
+
+      renderWorkspace();
+    }
+
+    function setTab(tabKey) {
+      currentTab = tabKey;
+      document.getElementById('tab-brief-content').className = tabKey === 'brief' ? 'space-y-5' : 'hidden';
+      document.getElementById('tab-chat-content').className = tabKey === 'chat' ? 'space-y-4' : 'hidden';
+      document.getElementById('tab-evidence-content').className = tabKey === 'evidence' ? 'space-y-4' : 'hidden';
+
+      document.getElementById('tab-brief-btn').className = tabKey === 'brief'
+        ? 'px-4 py-2.5 rounded-lg flex items-center gap-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 font-semibold'
+        : 'px-4 py-2.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200';
+
+      document.getElementById('tab-chat-btn').className = tabKey === 'chat'
+        ? 'px-4 py-2.5 rounded-lg flex items-center gap-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 font-semibold'
+        : 'px-4 py-2.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200';
+
+      document.getElementById('tab-evidence-btn').className = tabKey === 'evidence'
+        ? 'px-4 py-2.5 rounded-lg flex items-center gap-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 font-semibold'
+        : 'px-4 py-2.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200';
+    }
+
+    function renderWorkspace() {
+      const deal = DATA[currentDeal];
+      document.getElementById('deal-title').textContent = deal.name;
+      document.getElementById('deal-subtitle').innerHTML = `Client: ${deal.subtitle} • Memory Bank: <code class="${currentMode === 'with' ? 'text-emerald-400' : 'text-rose-400'} font-mono">deal-${currentDeal}-corp (${currentMode === 'with' ? 'ACTIVE' : 'DISABLED'})</code>`;
+      document.getElementById('deal-budget').textContent = deal.budget;
+
+      // Render Brief
+      const briefBox = document.getElementById('brief-box');
+      briefBox.textContent = currentMode === 'with' ? deal.withBrief : deal.withoutBrief;
+
+      // Render Evidence Summary Box
+      const evidenceBox = document.getElementById('evidence-summary-box');
+      if (currentMode === 'with') {
+        evidenceBox.innerHTML = `
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <span class="font-semibold text-slate-200 text-sm flex items-center gap-2">
+              <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400"></i> Hindsight Memory Evidence (25 Retrieved Facts)
+            </span>
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">Grounded RAG Proof</span>
+          </div>
+          <div class="space-y-2 text-xs">
+            <div class="p-2.5 bg-slate-950/70 rounded-lg border border-slate-800 flex items-start gap-2 text-slate-300">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 mt-0.5 shrink-0"></i>
+              <div>
+                <p>Retrieved Fact: Approved final Year 1 budget of ${deal.budget} following CFO scrutiny.</p>
+                <span class="text-[11px] text-blue-400">DECISION • 2026-09-22</span>
+              </div>
+            </div>
+            <div class="p-2.5 bg-slate-950/70 rounded-lg border border-slate-800 flex items-start gap-2 text-slate-300">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 mt-0.5 shrink-0"></i>
+              <div>
+                <p>Retrieved Fact: Primary objection resolved through live demonstration and compliance whitepaper.</p>
+                <span class="text-[11px] text-blue-400">OUTCOME • 2026-09-25</span>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        evidenceBox.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-rose-300 text-sm flex items-center gap-2">
+              <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i> Hindsight Memory Evidence (0 Facts Retrieved)
+            </span>
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium">Un-grounded Mode</span>
+          </div>
+          <p class="text-xs text-rose-300/80 leading-relaxed mt-2">
+            ⚠️ Without Hindsight Memory Engine, standard LLM has 0 historical facts retrieved. The AI is unable to cite meeting provenance or recall past decision agreements.
+          </p>
+        `;
+      }
+
+      // Render Chat Messages
+      const chatContainer = document.getElementById('chat-messages');
+      const chatList = currentMode === 'with' ? deal.withChat : deal.withoutChat;
+      chatContainer.innerHTML = chatList.map(msg => `
+        <div class="flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}">
+          <div class="p-2 rounded-lg text-white shrink-0 ${msg.role === 'user' ? 'bg-blue-600' : currentMode === 'with' ? 'bg-slate-800 border border-slate-700' : 'bg-rose-950 border border-rose-800'}">
+            <i data-lucide="${msg.role === 'user' ? 'user' : 'bot'}" class="w-4 h-4 ${msg.role === 'assistant' ? (currentMode === 'with' ? 'text-blue-400' : 'text-rose-400') : ''}"></i>
+          </div>
+          <div class="max-w-[80%] rounded-xl p-4 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-blue-600/90 text-white font-medium' : currentMode === 'with' ? 'bg-slate-800/90 text-slate-200 border border-slate-700' : 'bg-slate-900 text-rose-200 border border-rose-900'}">
+            <div class="whitespace-pre-wrap">${msg.content}</div>
+            ${msg.evidence ? `
+              <div class="mt-3 pt-3 border-t border-slate-700/60 space-y-1.5 text-xs">
+                <span class="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                  <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Cited Hindsight Memories:
+                </span>
+                ${msg.evidence.map(e => `
+                  <div class="p-2 bg-slate-950 rounded border border-slate-800 text-[11px] text-slate-300">
+                    ${e.text} <span class="text-blue-400 block mt-0.5">${e.type} • ${e.timestamp}</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      // Render Memory Inspector Tab Content
+      const inspectorBox = document.getElementById('memory-inspector-box');
+      if (currentMode === 'with') {
+        inspectorBox.innerHTML = `
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <span class="font-bold text-slate-100 text-sm flex items-center gap-2">
+              <i data-lucide="database" class="w-4 h-4 text-purple-400"></i> Hindsight Memory Inspector (bank: deal-${currentDeal}-corp)
+            </span>
+            <span class="text-emerald-400 font-semibold text-xs">25 Memories Retained</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+              <span class="text-purple-400 font-mono text-[10px] uppercase block">INTERACTION • 2026-03-01</span>
+              <p class="text-slate-200">Manual processing of 10,000 monthly invoices across 3 regional offices. Budget estimate ₹1,20,000.</p>
+            </div>
+            <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+              <span class="text-purple-400 font-mono text-[10px] uppercase block">OBJECTION • 2026-06-25</span>
+              <p class="text-slate-200">CSO David Vance raised multi-tenancy security objection and demanded SOC2 Type II whitepaper.</p>
+            </div>
+            <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+              <span class="text-purple-400 font-mono text-[10px] uppercase block">PRICING • 2026-09-12</span>
+              <p class="text-slate-200">CFO Thomas Wright capped budget at ₹1,00,000 to compete with InvoiceFlow ₹70,000 quote.</p>
+            </div>
+            <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+              <span class="text-purple-400 font-mono text-[10px] uppercase block">OUTCOME • 2026-09-28</span>
+              <p class="text-slate-200">Contract signed for ₹80,000 annual subscription with 10-day deployment guarantee. Deal Closed Won.</p>
+            </div>
+          </div>
+        `;
+      } else {
+        inspectorBox.innerHTML = `
+          <div class="p-8 text-center text-rose-300 space-y-2">
+            <i data-lucide="database-backup" class="w-8 h-8 text-rose-400 mx-auto"></i>
+            <h4 class="font-bold text-sm">Hindsight Memory Engine Disabled in Comparison Mode</h4>
+            <p class="text-xs text-slate-400 max-w-md mx-auto">
+              Without Hindsight memory active, no long-term memory units, temporal tracking, or entity graphs exist. Switch to "With Hindsight Memory Agent" mode above to inspect live memory units.
+            </p>
+          </div>
+        `;
+      }
+
+      lucide.createIcons();
+    }
+
+    function sendChat() {
+      const input = document.getElementById('chat-input');
+      const val = input.value.trim();
+      if (!val) return;
+
+      const chatContainer = document.getElementById('chat-messages');
+      const userHtml = `
+        <div class="flex items-start gap-3 flex-row-reverse">
+          <div class="p-2 rounded-lg bg-blue-600 text-white shrink-0">
+            <i data-lucide="user" class="w-4 h-4"></i>
+          </div>
+          <div class="max-w-[80%] rounded-xl p-4 text-sm leading-relaxed bg-blue-600/90 text-white font-medium">
+            ${val}
+          </div>
+        </div>
+      `;
+      chatContainer.innerHTML += userHtml;
+      input.value = '';
+
+      setTimeout(() => {
+        let aiResponse = '';
+        if (currentMode === 'without') {
+          aiResponse = `I am a standard stateless LLM. I have no memory of past meetings or context regarding "${val}". Please re-paste the full interaction history so I can assist.`;
+        } else {
+          aiResponse = `Based on retrieved Hindsight memory facts for ${DATA[currentDeal].name}, all requirements, budget updates, and objections related to "${val}" have been analyzed and verified against historical meeting notes.`;
+        }
+
+        const aiHtml = `
+          <div class="flex items-start gap-3">
+            <div class="p-2 rounded-lg text-white shrink-0 ${currentMode === 'with' ? 'bg-slate-800 border border-slate-700' : 'bg-rose-950 border border-rose-800'}">
+              <i data-lucide="bot" class="w-4 h-4 ${currentMode === 'with' ? 'text-blue-400' : 'text-rose-400'}"></i>
+            </div>
+            <div class="max-w-[80%] rounded-xl p-4 text-sm leading-relaxed ${currentMode === 'with' ? 'bg-slate-800/90 text-slate-200 border border-slate-700' : 'bg-slate-900 text-rose-200 border border-rose-900'}">
+              ${aiResponse}
+            </div>
+          </div>
+        `;
+        chatContainer.innerHTML += aiHtml;
+        lucide.createIcons();
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }, 500);
+    }
+
+    // Initialize on load
+    window.onload = function() {
+      lucide.createIcons();
+      renderWorkspace();
+    };
+  </script>
+</body>
+</html>
