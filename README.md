@@ -4,7 +4,6 @@
 
 **Author & Developer**: **Rudra Narapogu**  
 **Repository**: [https://github.com/RudraNarapogu/Deal-Intelligence](https://github.com/RudraNarapogu/Deal-Intelligence)  
-**Hackathon Target**: Hindsight Memory AI Agent Challenge
 
 ---
 
